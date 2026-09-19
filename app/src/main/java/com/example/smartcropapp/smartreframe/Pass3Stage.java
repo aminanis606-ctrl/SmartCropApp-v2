@@ -3,6 +3,7 @@ package com.example.smartcropapp.smartreframe;
 import android.content.Context;
 import android.net.Uri;
 
+import com.example.smartcropapp.core.ExportQuality;
 import com.example.smartcropapp.core.Pass3Renderer;
 import com.example.smartcropapp.nalaros.Artifact;
 import com.example.smartcropapp.nalaros.Stage;
@@ -14,9 +15,15 @@ import java.util.List;
 public class Pass3Stage implements Stage {
 
     private final File outputVideoFile;
+    private final ExportQuality exportQuality;
 
     public Pass3Stage(File outputVideoFile) {
+        this(outputVideoFile, ExportQuality.AUTO);
+    }
+
+    public Pass3Stage(File outputVideoFile, ExportQuality exportQuality) {
         this.outputVideoFile = outputVideoFile;
+        this.exportQuality = exportQuality != null ? exportQuality : ExportQuality.AUTO;
     }
 
     @Override
@@ -46,6 +53,10 @@ public class Pass3Stage implements Stage {
                 (SmartReframeTask) task.getConfiguration();
         Context context = smartReframeTask.getContext();
 
+        ExportQuality quality = (smartReframeTask.getExportQuality() != null)
+                ? smartReframeTask.getExportQuality()
+                : this.exportQuality;
+
         Uri sourceVideoUri =
                 (Uri) task.getInput();
 
@@ -57,7 +68,8 @@ public class Pass3Stage implements Stage {
                         context,
                         sourceVideoUri,
                         trajectoryFile,
-                        outputVideoFile);
+                        outputVideoFile,
+                        quality);
 
         return new Artifact(
                 "video",

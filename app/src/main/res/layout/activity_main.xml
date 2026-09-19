@@ -28,10 +28,72 @@
         android:textColor="#FFFFFF"
         android:textSize="32sp"
         android:textStyle="bold"
+        app:layout_constraintBottom_toTopOf="@id/layoutExportQuality"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.35" />
+
+    <LinearLayout
+        android:id="@+id/layoutExportQuality"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:layout_marginBottom="24dp"
         app:layout_constraintBottom_toTopOf="@id/btnStart"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintVertical_bias="0.3" />
+        app:layout_constraintTop_toBottomOf="@id/tvPipelineTitle">
+
+        <TextView
+            android:id="@+id/tvExportQuality"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/export_quality_label"
+            android:textColor="#E0E0E0"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <RadioGroup
+            android:id="@+id/rgExportQuality"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <RadioButton
+                android:id="@+id/rbQualityAuto"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp"
+                android:text="@string/export_quality_auto"
+                android:textColor="#FFFFFF"
+                android:buttonTint="#BB86FC"
+                android:checked="true"
+                android:layout_marginEnd="16dp" />
+
+            <RadioButton
+                android:id="@+id/rbQuality720p"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp"
+                android:text="@string/export_quality_720p"
+                android:textColor="#FFFFFF"
+                android:buttonTint="#BB86FC"
+                android:layout_marginEnd="16dp" />
+
+            <RadioButton
+                android:id="@+id/rbQuality1080p"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp"
+                android:text="@string/export_quality_1080p"
+                android:textColor="#FFFFFF"
+                android:buttonTint="#BB86FC" />
+        </RadioGroup>
+    </LinearLayout>
 
     <Button
         android:id="@+id/btnStart"
@@ -45,7 +107,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.6" />
+        app:layout_constraintVertical_bias="0.65" />
 
     <TextView
         android:id="@+id/statusText"

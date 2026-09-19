@@ -3,6 +3,7 @@ package com.example.smartcropapp.smartreframe;
 import android.content.Context;
 import android.net.Uri;
 
+import com.example.smartcropapp.core.ExportQuality;
 import com.example.smartcropapp.nalaros.Artifact;
 import com.example.smartcropapp.nalaros.ExecutionEngine;
 import com.example.smartcropapp.nalaros.Task;
@@ -16,15 +17,25 @@ public class SmartReframeOrchestrator {
     private final Uri sourceVideoUri;
     private final String videoId;
     private Artifact analysisArtifact;
+    private ExportQuality exportQuality = ExportQuality.AUTO;
 
     public SmartReframeOrchestrator(
             Context context,
             Uri sourceVideoUri,
             String videoId) {
+        this(context, sourceVideoUri, videoId, ExportQuality.AUTO);
+    }
+
+    public SmartReframeOrchestrator(
+            Context context,
+            Uri sourceVideoUri,
+            String videoId,
+            ExportQuality exportQuality) {
 
         this.context = context;
         this.sourceVideoUri = sourceVideoUri;
         this.videoId = videoId;
+        this.exportQuality = exportQuality != null ? exportQuality : ExportQuality.AUTO;
     }
 
     public Context getContext() {
@@ -39,12 +50,21 @@ public class SmartReframeOrchestrator {
         return videoId;
     }
 
+    public ExportQuality getExportQuality() {
+        return exportQuality;
+    }
+
+    public void setExportQuality(ExportQuality exportQuality) {
+        this.exportQuality = exportQuality != null ? exportQuality : ExportQuality.AUTO;
+    }
+
     public Artifact runPass1(File analysisFile) throws Exception {
         SmartReframeTask configuration =
                 new SmartReframeTask(
                         context,
                         sourceVideoUri,
-                        videoId);
+                        videoId,
+                        exportQuality);
 
         Task task =
                 new Task(
@@ -74,7 +94,8 @@ public class SmartReframeOrchestrator {
                 new SmartReframeTask(
                         context,
                         sourceVideoUri,
-                        videoId);
+                        videoId,
+                        exportQuality);
 
         if (analysisArtifact == null ||
                 !analysisArtifact.isValid()) {
@@ -91,8 +112,18 @@ public class SmartReframeOrchestrator {
                         configuration,
                         Arrays.asList(
                                 new Pass2Stage(trajectoryFile),
-                                new Pass3Stage(outputVideoFile)));
+                                new Pass3Stage(outputVideoFile, exportQuality)));
 
         return new ExecutionEngine().execute(task);
+    }
+
+    public Artifact runPass2AndPass3(
+            File trajectoryFile,
+            File outputVideoFile,
+            ExportQuality quality) throws Exception {
+        if (quality != null) {
+            this.exportQuality = quality;
+        }
+        return runPass2AndPass3(trajectoryFile, outputVideoFile);
     }
 }

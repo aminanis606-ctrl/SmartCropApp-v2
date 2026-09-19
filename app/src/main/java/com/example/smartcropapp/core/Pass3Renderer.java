@@ -21,18 +21,25 @@ import java.nio.ByteBuffer;
 public class Pass3Renderer {
     private static final String TAG = "Pass3Renderer";
     private static final String OUTPUT_MIME = "video/avc";
-    private static final int OUTPUT_WIDTH = 720;
-    private static final int OUTPUT_HEIGHT = 1280;
-    private static final int OUTPUT_BITRATE = 2_500_000;
+    private static final int DEFAULT_OUTPUT_WIDTH = 720;
+    private static final int DEFAULT_OUTPUT_HEIGHT = 1280;
+    private static final int DEFAULT_OUTPUT_BITRATE = 2_500_000;
     private static final int OUTPUT_FPS = 30;
     private static final long TIMEOUT_US = 10000;
 
     public static File render(Context context, Uri sourceVideoUri, File trajectoryFile, File outputVideoFile) {
+        return render(context, sourceVideoUri, trajectoryFile, outputVideoFile, ExportQuality.AUTO);
+    }
+
+    public static File render(Context context, Uri sourceVideoUri, File trajectoryFile, File outputVideoFile, ExportQuality exportQuality) {
         if (context == null || sourceVideoUri == null || trajectoryFile == null || outputVideoFile == null) {
             throw new NullPointerException("Parameter render tidak boleh null");
         }
+        if (exportQuality == null) {
+            exportQuality = ExportQuality.AUTO;
+        }
         
-        Log.d(TAG, "Starting Pass 3...");
+        Log.d(TAG, "Starting Pass 3 with quality: " + exportQuality.getDisplayName() + "...");
         
         TrajectoryReader trajectory = null;
         try {
@@ -42,7 +49,7 @@ public class Pass3Renderer {
         }
 
         try {
-            renderVideoTrack(context, sourceVideoUri, outputVideoFile, trajectory);
+            renderVideoTrack(context, sourceVideoUri, outputVideoFile, trajectory, exportQuality);
             Log.d(TAG, "Pass 3 Finished Successfully");
             return outputVideoFile;
         } catch (Exception e) {
@@ -50,7 +57,7 @@ public class Pass3Renderer {
         }
     }
 
-    private static void renderVideoTrack(Context context, Uri sourceVideoUri, File outputFile, TrajectoryReader trajectory) throws Exception {
+    private static void renderVideoTrack(Context context, Uri sourceVideoUri, File outputFile, TrajectoryReader trajectory, ExportQuality exportQuality) throws Exception {
         MediaExtractor extractor = new MediaExtractor();
         extractor.setDataSource(context, sourceVideoUri, null);
 
@@ -75,10 +82,18 @@ public class Pass3Renderer {
         int srcWidth = inputFormat.getInteger(MediaFormat.KEY_WIDTH);
         int srcHeight = inputFormat.getInteger(MediaFormat.KEY_HEIGHT);
 
+        ExportQuality.ResolutionConfig config = ExportQuality.resolveResolution(exportQuality, srcWidth, srcHeight);
+        int outputWidth = config.width;
+        int outputHeight = config.height;
+        int outputBitrate = config.bitrate;
+
+        Log.d(TAG, "Quality: " + exportQuality + ", Source: " + srcWidth + "x" + srcHeight
+                + " -> Output: " + outputWidth + "x" + outputHeight + " @" + outputBitrate + "bps");
+
         // 1. Setup Encoder
-        MediaFormat outputFormat = MediaFormat.createVideoFormat(OUTPUT_MIME, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+        MediaFormat outputFormat = MediaFormat.createVideoFormat(OUTPUT_MIME, outputWidth, outputHeight);
         outputFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
-        outputFormat.setInteger(MediaFormat.KEY_BIT_RATE, OUTPUT_BITRATE);
+        outputFormat.setInteger(MediaFormat.KEY_BIT_RATE, outputBitrate);
         outputFormat.setInteger(MediaFormat.KEY_FRAME_RATE, OUTPUT_FPS);
         outputFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2);
 
@@ -112,7 +127,7 @@ public class Pass3Renderer {
         boolean encoderDone = false;
 
         MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
-        final int panelH = OUTPUT_HEIGHT / 2;
+        final int panelH = outputHeight / 2;
 
         // --- AUDIO COPY THREAD ---
         Thread audioThread = null;
@@ -201,7 +216,7 @@ public class Pass3Renderer {
                     // === SMART REFRAME LOGIC ===
                     
                     // 1. Clear entire screen ONCE
-                    GLES20.glViewport(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+                    GLES20.glViewport(0, 0, outputWidth, outputHeight);
                     GLES20.glClearColor(0f, 0f, 0f, 1.0f);
                     GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
 
@@ -237,17 +252,17 @@ public class Pass3Renderer {
                     // Calculate aspect ratio corrected crop size
                     float cropWidthNorm = 0.40f; // For split view
                     float cropHeightNorm = clamp(
-                            cropWidthNorm * (panelH / (float) OUTPUT_WIDTH) * (srcWidth / (float) srcHeight),
+                            cropWidthNorm * (panelH / (float) outputWidth) * (srcWidth / (float) srcHeight),
                             0.1f, 1f);
                     
                     float fullCropHeightNorm = 1.0f; // For single view
                     float fullCropWidthNorm = clamp(
-                            fullCropHeightNorm * (OUTPUT_WIDTH / (float) OUTPUT_HEIGHT) * (srcHeight / (float) srcWidth),
+                            fullCropHeightNorm * (outputWidth / (float) outputHeight) * (srcHeight / (float) srcWidth),
                             0.1f, 1f);
 
                     if ("split".equals(layout)) {
                         // Background video underneath feathered panels.
-                        GLES20.glViewport(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+                        GLES20.glViewport(0, 0, outputWidth, outputHeight);
                         GLES20.glDisable(GLES20.GL_BLEND);
                         shader.draw(
                                 glContext.getDecoderTextureId(),
@@ -266,7 +281,7 @@ public class Pass3Renderer {
                         final float feather = 0.02f;
 
                         // Top panel
-                        GLES20.glViewport(0, panelH, OUTPUT_WIDTH, panelH);
+                        GLES20.glViewport(0, panelH, outputWidth, panelH);
                         shader.draw(
                                 glContext.getDecoderTextureId(),
                                 stMatrix,
@@ -278,7 +293,7 @@ public class Pass3Renderer {
                                 feather);
 
                         // Bottom panel
-                        GLES20.glViewport(0, 0, OUTPUT_WIDTH, panelH);
+                        GLES20.glViewport(0, 0, outputWidth, panelH);
                         shader.draw(
                                 glContext.getDecoderTextureId(),
                                 stMatrix,
@@ -293,7 +308,7 @@ public class Pass3Renderer {
 
                     } else {
                         // Draw Single Full Screen (Center Crop)
-                        GLES20.glViewport(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+                        GLES20.glViewport(0, 0, outputWidth, outputHeight);
                         shader.draw(glContext.getDecoderTextureId(), stMatrix, singleX, singleY, fullCropWidthNorm, fullCropHeightNorm);
                     }
                 }

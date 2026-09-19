@@ -27,7 +27,11 @@ import androidx.core.content.ContextCompat;
 import com.example.smartcropapp.core.Pass1Extractor;
 import com.example.smartcropapp.core.Pass2Optimizer;
 import com.example.smartcropapp.core.Pass3Renderer;
+import com.example.smartcropapp.core.ExportQuality;
 import com.example.smartcropapp.smartreframe.SmartReframeOrchestrator;
+
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -39,6 +43,10 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "IkhlasApp";
     
     private TextView statusText;
+    private RadioGroup rgExportQuality;
+    private RadioButton rbQualityAuto;
+    private RadioButton rbQuality720p;
+    private RadioButton rbQuality1080p;
     private Uri selectedVideoUri;
     private ActivityResultLauncher<PickVisualMediaRequest> pickMedia;
     private boolean isProcessing = false;
@@ -57,6 +65,10 @@ public class MainActivity extends AppCompatActivity {
     private void setupUI() {
         statusText = findViewById(R.id.statusText);
         Button btnStart = findViewById(R.id.btnStart);
+        rgExportQuality = findViewById(R.id.rgExportQuality);
+        rbQualityAuto = findViewById(R.id.rbQualityAuto);
+        rbQuality720p = findViewById(R.id.rbQuality720p);
+        rbQuality1080p = findViewById(R.id.rbQuality1080p);
         
         btnStart.setText("MULAI PROSES");
         btnStart.setOnClickListener(v -> {
@@ -71,6 +83,44 @@ public class MainActivity extends AppCompatActivity {
                     .setMediaType(ActivityResultContracts.PickVisualMedia.VideoOnly.INSTANCE)
                     .build());
         });
+    }
+
+    public ExportQuality getSelectedExportQuality() {
+        if (rgExportQuality == null) {
+            return ExportQuality.AUTO;
+        }
+        int checkedId = rgExportQuality.getCheckedRadioButtonId();
+        if (checkedId == R.id.rbQuality720p) {
+            return ExportQuality.P720;
+        } else if (checkedId == R.id.rbQuality1080p) {
+            return ExportQuality.P1080;
+        } else {
+            return ExportQuality.AUTO;
+        }
+    }
+
+    public void setExportQuality(ExportQuality quality) {
+        if (quality == null || rgExportQuality == null) return;
+        switch (quality) {
+            case P720:
+                if (rbQuality720p != null) rbQuality720p.setChecked(true);
+                break;
+            case P1080:
+                if (rbQuality1080p != null) rbQuality1080p.setChecked(true);
+                break;
+            case AUTO:
+            default:
+                if (rbQualityAuto != null) rbQualityAuto.setChecked(true);
+                break;
+        }
+    }
+
+    private void setExportQualityEnabled(boolean enabled) {
+        if (rgExportQuality != null) {
+            for (int i = 0; i < rgExportQuality.getChildCount(); i++) {
+                rgExportQuality.getChildAt(i).setEnabled(enabled);
+            }
+        }
     }
 
     private void setupMediaPicker() {
@@ -112,8 +162,10 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        final ExportQuality exportQuality = getSelectedExportQuality();
         isProcessing = true;
-        statusText.setText("Memulai Pipeline Otomatis...");
+        setExportQualityEnabled(false);
+        statusText.setText("Memulai Pipeline Otomatis (" + exportQuality.getDisplayName() + ")...");
 
         new Thread(() -> {
             try {
@@ -121,7 +173,8 @@ public class MainActivity extends AppCompatActivity {
                         new SmartReframeOrchestrator(
                                 this,
                                 selectedVideoUri,
-                                getVideoId(selectedVideoUri));
+                                getVideoId(selectedVideoUri),
+                                exportQuality);
 
                 // PHASE 1 / PASS 1
                 runOnUiThread(() ->
@@ -157,11 +210,12 @@ public class MainActivity extends AppCompatActivity {
                         new File(getFilesDir(), "trajectory.json");
 
                 runOnUiThread(() ->
-                        statusText.setText("Pass 3: Rendering Video..."));
+                        statusText.setText("Pass 3: Rendering Video (" + exportQuality.getDisplayName() + ")..."));
 
                 orchestrator.runPass2AndPass3(
                         internalTrajectory,
-                        outputVideo);
+                        outputVideo,
+                        exportQuality);
 
                 runOnUiThread(() -> {
                     statusText.setText(
@@ -173,6 +227,7 @@ public class MainActivity extends AppCompatActivity {
                             Toast.LENGTH_LONG).show();
 
                     isProcessing = false;
+                    setExportQualityEnabled(true);
                 });
 
             } catch (Exception e) {
@@ -187,6 +242,7 @@ public class MainActivity extends AppCompatActivity {
                             Toast.LENGTH_LONG).show();
 
                     isProcessing = false;
+                    setExportQualityEnabled(true);
                 });
             }
         }).start();
