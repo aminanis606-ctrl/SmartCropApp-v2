@@ -37,6 +37,9 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
@@ -48,7 +51,8 @@ public class MainActivity extends AppCompatActivity {
     private RadioButton rbQuality720p;
     private RadioButton rbQuality1080p;
     private Uri selectedVideoUri;
-    private ActivityResultLauncher<PickVisualMediaRequest> pickMedia;
+    private List<Uri> selectedVideoUris = new ArrayList<>();
+    private ActivityResultLauncher<PickVisualMediaRequest> pickMultipleMedia;
     private boolean isProcessing = false;
 
     @Override
@@ -79,7 +83,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             
-            pickMedia.launch(new PickVisualMediaRequest.Builder()
+            pickMultipleMedia.launch(new PickVisualMediaRequest.Builder()
                     .setMediaType(ActivityResultContracts.PickVisualMedia.VideoOnly.INSTANCE)
                     .build());
         });
@@ -124,14 +128,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupMediaPicker() {
-        pickMedia = registerForActivityResult(new ActivityResultContracts.PickVisualMedia(), uri -> {
-            if (uri != null) {
-                selectedVideoUri = uri;
-                startAutoPipeline();
-            } else {
-                statusText.setText("Pemilihan video dibatalkan.");
-            }
-        });
+        pickMultipleMedia = registerForActivityResult(
+                new ActivityResultContracts.PickMultipleVisualMedia(),
+                uris -> {
+                    if (uris != null && !uris.isEmpty()) {
+                        selectedVideoUris = new ArrayList<>(uris);
+                        selectedVideoUri = uris.get(0);
+                        startBatchPipeline(selectedVideoUris);
+                    } else {
+                        statusText.setText("Pemilihan video dibatalkan.");
+                    }
+                });
     }
 
     private String getVideoId(Uri uri) {
@@ -157,94 +164,140 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startAutoPipeline() {
-        if (selectedVideoUri == null) {
+        if (selectedVideoUris != null && !selectedVideoUris.isEmpty()) {
+            startBatchPipeline(selectedVideoUris);
+        } else if (selectedVideoUri != null) {
+            startBatchPipeline(Collections.singletonList(selectedVideoUri));
+        } else {
+            Toast.makeText(this, "Pilih video terlebih dahulu!", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    public void startBatchPipeline(List<Uri> videoUris) {
+        if (videoUris == null || videoUris.isEmpty()) {
             Toast.makeText(this, "Pilih video terlebih dahulu!", Toast.LENGTH_SHORT).show();
             return;
         }
 
+        final List<Uri> queue = new ArrayList<>(videoUris);
+        final int totalVideos = queue.size();
         final ExportQuality exportQuality = getSelectedExportQuality();
+
         isProcessing = true;
         setExportQualityEnabled(false);
-        statusText.setText("Memulai Pipeline Otomatis (" + exportQuality.getDisplayName() + ")...");
+
+        if (totalVideos == 1) {
+            statusText.setText("Memulai Pipeline Otomatis (" + exportQuality.getDisplayName() + ")...");
+        } else {
+            statusText.setText("Memulai Batch Processing (" + totalVideos + " video, " + exportQuality.getDisplayName() + ")...");
+        }
 
         new Thread(() -> {
-            try {
-                SmartReframeOrchestrator orchestrator =
-                        new SmartReframeOrchestrator(
-                                this,
-                                selectedVideoUri,
-                                getVideoId(selectedVideoUri),
-                                exportQuality);
+            int successCount = 0;
+            int failureCount = 0;
+            List<String> failedVideos = new ArrayList<>();
 
-                // PHASE 1 / PASS 1
-                runOnUiThread(() ->
-                        statusText.setText("Pass 1: Analisis Video..."));
-
-                File internalAnalysis =
-                        new File(getFilesDir(), "analysis.json");
-
-                orchestrator.runPass1(internalAnalysis);
-
-                // OUTPUT PLANNING
-                File outputDir =
-                        new File(
-                                Environment.getExternalStoragePublicDirectory(
-                                        Environment.DIRECTORY_MOVIES),
-                                "IkhlasApp");
-
-                if (!outputDir.exists()) {
-                    outputDir.mkdirs();
-                }
-
-                File outputVideo =
-                        createUniqueOutputFile(
-                                selectedVideoUri,
-                                internalAnalysis,
-                                outputDir);
-
-                // PHASE 2 / PASS 2 + PASS 3
-                runOnUiThread(() ->
-                        statusText.setText("Pass 2: Optimasi Gerakan..."));
-
-                File internalTrajectory =
-                        new File(getFilesDir(), "trajectory.json");
-
-                runOnUiThread(() ->
-                        statusText.setText("Pass 3: Rendering Video (" + exportQuality.getDisplayName() + ")..."));
-
-                orchestrator.runPass2AndPass3(
-                        internalTrajectory,
-                        outputVideo,
-                        exportQuality);
-
-                runOnUiThread(() -> {
-                    statusText.setText(
-                            "SELESAI! Video tersimpan di Movies/IkhlasApp/");
-
-                    Toast.makeText(
-                            MainActivity.this,
-                            "Proses berhasil!",
-                            Toast.LENGTH_LONG).show();
-
-                    isProcessing = false;
-                    setExportQualityEnabled(true);
-                });
-
-            } catch (Exception e) {
-                Log.e(TAG, "Pipeline Fatal Error", e);
-
-                runOnUiThread(() -> {
-                    statusText.setText("Error: " + e.getMessage());
-
-                    Toast.makeText(
-                            MainActivity.this,
-                            "Gagal: " + e.getMessage(),
-                            Toast.LENGTH_LONG).show();
-
-                    isProcessing = false;
-                    setExportQualityEnabled(true);
-                });
+            File outputDir = new File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
+                    "IkhlasApp");
+            if (!outputDir.exists()) {
+                outputDir.mkdirs();
             }
+
+            for (int i = 0; i < totalVideos; i++) {
+                final int currentIndex = i + 1;
+                final Uri currentUri = queue.get(i);
+                final String videoId = getVideoId(currentUri);
+                final String progressPrefix = totalVideos > 1
+                        ? ("Memproses video " + currentIndex + "/" + totalVideos + ": ")
+                        : "";
+
+                File internalAnalysis = new File(getFilesDir(), "analysis_" + currentIndex + "_" + videoId + ".json");
+                File internalTrajectory = new File(getFilesDir(), "trajectory_" + currentIndex + "_" + videoId + ".json");
+
+                // Ensure no previous state is carried over
+                if (internalAnalysis.exists()) internalAnalysis.delete();
+                if (internalTrajectory.exists()) internalTrajectory.delete();
+
+                try {
+                    SmartReframeOrchestrator orchestrator = new SmartReframeOrchestrator(
+                            this,
+                            currentUri,
+                            videoId,
+                            exportQuality);
+
+                    // PHASE 1 / PASS 1
+                    runOnUiThread(() ->
+                            statusText.setText(progressPrefix + "Pass 1: Analisis Video..."));
+
+                    orchestrator.runPass1(internalAnalysis);
+
+                    // OUTPUT PLANNING
+                    File outputVideo = createUniqueOutputFile(
+                            currentUri,
+                            internalAnalysis,
+                            outputDir);
+
+                    // PHASE 2 / PASS 2 + PASS 3
+                    runOnUiThread(() ->
+                            statusText.setText(progressPrefix + "Pass 2: Optimasi Gerakan..."));
+
+                    runOnUiThread(() ->
+                            statusText.setText(progressPrefix + "Pass 3: Rendering Video (" + exportQuality.getDisplayName() + ")..."));
+
+                    orchestrator.runPass2AndPass3(
+                            internalTrajectory,
+                            outputVideo,
+                            exportQuality);
+
+                    successCount++;
+                    Log.i(TAG, "Video " + currentIndex + "/" + totalVideos + " (" + videoId + ") selesai: " + outputVideo.getAbsolutePath());
+
+                } catch (Exception e) {
+                    failureCount++;
+                    String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                    Log.e(TAG, "Gagal memproses video " + currentIndex + "/" + totalVideos + " (" + videoId + ")", e);
+                    failedVideos.add("Video " + currentIndex + " (" + videoId + "): " + errorMsg);
+                } finally {
+                    // Clean up temporary files per video to guarantee safe isolation
+                    if (internalAnalysis.exists()) internalAnalysis.delete();
+                    if (internalTrajectory.exists()) internalTrajectory.delete();
+                }
+            }
+
+            final int finalSuccess = successCount;
+            final int finalFailure = failureCount;
+
+            runOnUiThread(() -> {
+                isProcessing = false;
+                setExportQualityEnabled(true);
+
+                if (totalVideos == 1) {
+                    if (finalSuccess == 1) {
+                        statusText.setText("SELESAI! Video tersimpan di Movies/IkhlasApp/\n(Berhasil: 1, Gagal: 0)");
+                        Toast.makeText(MainActivity.this, "Proses berhasil!", Toast.LENGTH_LONG).show();
+                    } else {
+                        statusText.setText("Gagal memproses video.\n(Berhasil: 0, Gagal: 1)");
+                        Toast.makeText(MainActivity.this, "Proses gagal!", Toast.LENGTH_LONG).show();
+                    }
+                } else {
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("Batch Selesai!\n");
+                    sb.append("Berhasil: ").append(finalSuccess).append(" | Gagal: ").append(finalFailure);
+                    if (finalSuccess > 0) {
+                        sb.append("\nVideo tersimpan di Movies/IkhlasApp/");
+                    }
+                    if (finalFailure > 0) {
+                        sb.append("\n(").append(finalFailure).append(" video gagal)");
+                    }
+                    statusText.setText(sb.toString());
+
+                    Toast.makeText(
+                            MainActivity.this,
+                            "Batch selesai: " + finalSuccess + " berhasil, " + finalFailure + " gagal",
+                            Toast.LENGTH_LONG).show();
+                }
+            });
         }).start();
     }
 
