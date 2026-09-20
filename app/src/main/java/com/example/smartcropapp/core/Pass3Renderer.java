@@ -28,7 +28,7 @@ public class Pass3Renderer {
     private static final long TIMEOUT_US = 10000;
 
     public static File render(Context context, Uri sourceVideoUri, File trajectoryFile, File outputVideoFile) {
-        return render(context, sourceVideoUri, trajectoryFile, outputVideoFile, ExportQuality.AUTO);
+        return render(context, sourceVideoUri, trajectoryFile, outputVideoFile, ExportQuality.P720);
     }
 
     public static File render(Context context, Uri sourceVideoUri, File trajectoryFile, File outputVideoFile, ExportQuality exportQuality) {
@@ -36,7 +36,7 @@ public class Pass3Renderer {
             throw new NullPointerException("Parameter render tidak boleh null");
         }
         if (exportQuality == null) {
-            exportQuality = ExportQuality.AUTO;
+            exportQuality = ExportQuality.P720;
         }
         
         Log.d(TAG, "Starting Pass 3 with quality: " + exportQuality.getDisplayName() + "...");

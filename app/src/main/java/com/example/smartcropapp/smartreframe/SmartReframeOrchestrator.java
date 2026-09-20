@@ -17,13 +17,13 @@ public class SmartReframeOrchestrator {
     private final Uri sourceVideoUri;
     private final String videoId;
     private Artifact analysisArtifact;
-    private ExportQuality exportQuality = ExportQuality.AUTO;
+    private ExportQuality exportQuality = ExportQuality.P720;
 
     public SmartReframeOrchestrator(
             Context context,
             Uri sourceVideoUri,
             String videoId) {
-        this(context, sourceVideoUri, videoId, ExportQuality.AUTO);
+        this(context, sourceVideoUri, videoId, ExportQuality.P720);
     }
 
     public SmartReframeOrchestrator(
@@ -35,7 +35,7 @@ public class SmartReframeOrchestrator {
         this.context = context;
         this.sourceVideoUri = sourceVideoUri;
         this.videoId = videoId;
-        this.exportQuality = exportQuality != null ? exportQuality : ExportQuality.AUTO;
+        this.exportQuality = exportQuality != null ? exportQuality : ExportQuality.P720;
     }
 
     public Context getContext() {
@@ -55,7 +55,7 @@ public class SmartReframeOrchestrator {
     }
 
     public void setExportQuality(ExportQuality exportQuality) {
-        this.exportQuality = exportQuality != null ? exportQuality : ExportQuality.AUTO;
+        this.exportQuality = exportQuality != null ? exportQuality : ExportQuality.P720;
     }
 
     public Artifact runPass1(File analysisFile) throws Exception {

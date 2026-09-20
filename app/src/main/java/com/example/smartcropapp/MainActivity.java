@@ -46,8 +46,10 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "IkhlasApp";
     
     private TextView statusText;
+    private TextView tvSelectionStatus;
+    private Button btnPickVideos;
+    private Button btnStart;
     private RadioGroup rgExportQuality;
-    private RadioButton rbQualityAuto;
     private RadioButton rbQuality720p;
     private RadioButton rbQuality1080p;
     private Uri selectedVideoUri;
@@ -68,14 +70,16 @@ public class MainActivity extends AppCompatActivity {
 
     private void setupUI() {
         statusText = findViewById(R.id.statusText);
-        Button btnStart = findViewById(R.id.btnStart);
+        tvSelectionStatus = findViewById(R.id.tvSelectionStatus);
+        btnPickVideos = findViewById(R.id.btnPickVideos);
+        btnStart = findViewById(R.id.btnStart);
         rgExportQuality = findViewById(R.id.rgExportQuality);
-        rbQualityAuto = findViewById(R.id.rbQualityAuto);
         rbQuality720p = findViewById(R.id.rbQuality720p);
         rbQuality1080p = findViewById(R.id.rbQuality1080p);
-        
-        btnStart.setText("MULAI PROSES");
-        btnStart.setOnClickListener(v -> {
+
+        updateSelectionStatusUI();
+
+        btnPickVideos.setOnClickListener(v -> {
             if (isProcessing) return;
             
             if (!checkStoragePermission()) {
@@ -87,34 +91,57 @@ public class MainActivity extends AppCompatActivity {
                     .setMediaType(ActivityResultContracts.PickVisualMedia.VideoOnly.INSTANCE)
                     .build());
         });
+
+        btnStart.setText("MULAI PROSES");
+        btnStart.setOnClickListener(v -> {
+            if (isProcessing) return;
+
+            if (selectedVideoUris == null || selectedVideoUris.isEmpty()) {
+                Toast.makeText(MainActivity.this, "Pilih video terlebih dahulu!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (!checkStoragePermission()) {
+                requestStoragePermission();
+                return;
+            }
+
+            startBatchPipeline(selectedVideoUris);
+        });
+    }
+
+    private void updateSelectionStatusUI() {
+        if (tvSelectionStatus == null) return;
+        if (selectedVideoUris == null || selectedVideoUris.isEmpty()) {
+            tvSelectionStatus.setText("Belum ada video dipilih");
+        } else if (selectedVideoUris.size() == 1) {
+            tvSelectionStatus.setText("1 video dipilih");
+        } else {
+            tvSelectionStatus.setText(selectedVideoUris.size() + " video dipilih");
+        }
     }
 
     public ExportQuality getSelectedExportQuality() {
         if (rgExportQuality == null) {
-            return ExportQuality.AUTO;
+            return ExportQuality.P720;
         }
         int checkedId = rgExportQuality.getCheckedRadioButtonId();
-        if (checkedId == R.id.rbQuality720p) {
-            return ExportQuality.P720;
-        } else if (checkedId == R.id.rbQuality1080p) {
+        if (checkedId == R.id.rbQuality1080p) {
             return ExportQuality.P1080;
         } else {
-            return ExportQuality.AUTO;
+            return ExportQuality.P720;
         }
     }
 
     public void setExportQuality(ExportQuality quality) {
         if (quality == null || rgExportQuality == null) return;
         switch (quality) {
-            case P720:
-                if (rbQuality720p != null) rbQuality720p.setChecked(true);
-                break;
             case P1080:
                 if (rbQuality1080p != null) rbQuality1080p.setChecked(true);
                 break;
-            case AUTO:
+            case P720:
             default:
-                if (rbQualityAuto != null) rbQualityAuto.setChecked(true);
+                if (rbQuality720p != null) rbQuality720p.setChecked(true);
                 break;
         }
     }
@@ -134,10 +161,8 @@ public class MainActivity extends AppCompatActivity {
                     if (uris != null && !uris.isEmpty()) {
                         selectedVideoUris = new ArrayList<>(uris);
                         selectedVideoUri = uris.get(0);
-                        startBatchPipeline(selectedVideoUris);
-                    } else {
-                        statusText.setText("Pemilihan video dibatalkan.");
                     }
+                    updateSelectionStatusUI();
                 });
     }
 
@@ -185,6 +210,8 @@ public class MainActivity extends AppCompatActivity {
 
         isProcessing = true;
         setExportQualityEnabled(false);
+        if (btnPickVideos != null) btnPickVideos.setEnabled(false);
+        if (btnStart != null) btnStart.setEnabled(false);
 
         if (totalVideos == 1) {
             statusText.setText("Memulai Pipeline Otomatis (" + exportQuality.getDisplayName() + ")...");
@@ -271,6 +298,8 @@ public class MainActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 isProcessing = false;
                 setExportQualityEnabled(true);
+                if (btnPickVideos != null) btnPickVideos.setEnabled(true);
+                if (btnStart != null) btnStart.setEnabled(true);
 
                 if (totalVideos == 1) {
                     if (finalSuccess == 1) {

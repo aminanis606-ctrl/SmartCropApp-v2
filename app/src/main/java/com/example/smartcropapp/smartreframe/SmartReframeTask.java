@@ -13,13 +13,13 @@ public class SmartReframeTask {
     private final Uri sourceVideoUri;
     private final String videoId;
     private Artifact analysisArtifact;
-    private ExportQuality exportQuality = ExportQuality.AUTO;
+    private ExportQuality exportQuality = ExportQuality.P720;
 
     public SmartReframeTask(
             Context context,
             Uri sourceVideoUri,
             String videoId) {
-        this(context, sourceVideoUri, videoId, ExportQuality.AUTO);
+        this(context, sourceVideoUri, videoId, ExportQuality.P720);
     }
 
     public SmartReframeTask(
@@ -31,7 +31,7 @@ public class SmartReframeTask {
         this.context = context;
         this.sourceVideoUri = sourceVideoUri;
         this.videoId = videoId;
-        this.exportQuality = exportQuality != null ? exportQuality : ExportQuality.AUTO;
+        this.exportQuality = exportQuality != null ? exportQuality : ExportQuality.P720;
     }
 
     public Context getContext() {
@@ -59,6 +59,6 @@ public class SmartReframeTask {
     }
 
     public void setExportQuality(ExportQuality exportQuality) {
-        this.exportQuality = exportQuality != null ? exportQuality : ExportQuality.AUTO;
+        this.exportQuality = exportQuality != null ? exportQuality : ExportQuality.P720;
     }
 }

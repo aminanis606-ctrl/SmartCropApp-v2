@@ -18,12 +18,12 @@ public class Pass3Stage implements Stage {
     private final ExportQuality exportQuality;
 
     public Pass3Stage(File outputVideoFile) {
-        this(outputVideoFile, ExportQuality.AUTO);
+        this(outputVideoFile, ExportQuality.P720);
     }
 
     public Pass3Stage(File outputVideoFile, ExportQuality exportQuality) {
         this.outputVideoFile = outputVideoFile;
-        this.exportQuality = exportQuality != null ? exportQuality : ExportQuality.AUTO;
+        this.exportQuality = exportQuality != null ? exportQuality : ExportQuality.P720;
     }
 
     @Override
