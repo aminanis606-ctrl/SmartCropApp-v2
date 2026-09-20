@@ -30,7 +30,7 @@ jobs:
         run: |
           sdkmanager "platform-tools"
           sdkmanager "platforms;android-34"
-          sdkmanager "build-tools;34.0.0"
+          sdkmanager "build-tools;34.0.0" "ndk;27.2.12479018"
 
       - name: Build APK
         run: |

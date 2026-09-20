@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(realesrgan_jni)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+add_library(realesrgan_jni SHARED realesrgan_jni.cpp)
+add_library(ncnn SHARED IMPORTED)
+set_target_properties(ncnn PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/../jniLibs/arm64-v8a/libncnn.so" INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/third_party/ncnn/include")
+target_link_libraries(realesrgan_jni ncnn android log)
