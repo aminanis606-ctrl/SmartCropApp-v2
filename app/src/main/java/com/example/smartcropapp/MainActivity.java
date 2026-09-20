@@ -18,7 +18,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.PickVisualMediaRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -54,7 +53,7 @@ public class MainActivity extends AppCompatActivity {
     private RadioButton rbQuality1080p;
     private Uri selectedVideoUri;
     private List<Uri> selectedVideoUris = new ArrayList<>();
-    private ActivityResultLauncher<PickVisualMediaRequest> pickMultipleMedia;
+    private ActivityResultLauncher<String[]> pickMultipleMedia;
     private boolean isProcessing = false;
 
     @Override
@@ -87,9 +86,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             
-            pickMultipleMedia.launch(new PickVisualMediaRequest.Builder()
-                    .setMediaType(ActivityResultContracts.PickVisualMedia.VideoOnly.INSTANCE)
-                    .build());
+            pickMultipleMedia.launch(new String[]{"video/*"});
         });
 
         btnStart.setText("MULAI PROSES");
@@ -156,7 +153,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void setupMediaPicker() {
         pickMultipleMedia = registerForActivityResult(
-                new ActivityResultContracts.PickMultipleVisualMedia(),
+                new ActivityResultContracts.OpenMultipleDocuments(),
                 uris -> {
                     if (uris != null && !uris.isEmpty()) {
                         selectedVideoUris = new ArrayList<>(uris);
