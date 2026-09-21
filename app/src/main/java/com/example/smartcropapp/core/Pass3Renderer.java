@@ -14,9 +14,6 @@ import android.view.Surface;
 
 import com.example.smartcropapp.render.CropShaderProgram;
 import com.example.smartcropapp.render.GlRenderContext;
-import com.example.smartcropapp.sr.RealEsrgan;
-import com.example.smartcropapp.sr.SrFrameBuffer;
-import com.example.smartcropapp.sr.TextureShaderProgram;
 
 import java.io.File;
 import java.nio.ByteBuffer;
@@ -121,17 +118,6 @@ public class Pass3Renderer {
         encoder.start();
 
         CropShaderProgram shader = new CropShaderProgram();
-        RealEsrgan realEsrgan = new RealEsrgan(context);
-        // RealESRGAN x4: input 1/4 output agar hasil SR tepat resolusi encoder.
-        int srW = Math.max(1, outputWidth / 4);
-        int srH = Math.max(1, outputHeight / 4);
-        SrFrameBuffer srFbo = new SrFrameBuffer(srW, srH);
-        TextureShaderProgram srShader = new TextureShaderProgram();
-        int[] srTexture = new int[1];
-        GLES20.glGenTextures(1, srTexture, 0);
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, srTexture[0]);
-        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
-        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
 
         final int[] muxerVideoTrackRef = {-1};
         final int[] muxerAudioTrackRef = {-1};
@@ -142,7 +128,6 @@ public class Pass3Renderer {
 
         MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
         final int panelH = outputHeight / 2;
-        final int srPanelH = srH / 2;
 
         // --- AUDIO COPY THREAD ---
         Thread audioThread = null;
@@ -231,8 +216,7 @@ public class Pass3Renderer {
                     // === SMART REFRAME LOGIC ===
                     
                     // 1. Clear entire screen ONCE
-                    srFbo.bind();
-            GLES20.glViewport(0, 0, srW, srH);
+                    GLES20.glViewport(0, 0, outputWidth, outputHeight);
                     GLES20.glClearColor(0f, 0f, 0f, 1.0f);
                     GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
 
@@ -278,7 +262,7 @@ public class Pass3Renderer {
 
                     if ("split".equals(layout)) {
                         // Background video underneath feathered panels.
-                        GLES20.glViewport(0, 0, srW, srH);
+                        GLES20.glViewport(0, 0, outputWidth, outputHeight);
                         GLES20.glDisable(GLES20.GL_BLEND);
                         shader.draw(
                                 glContext.getDecoderTextureId(),
@@ -297,7 +281,7 @@ public class Pass3Renderer {
                         final float feather = 0.02f;
 
                         // Top panel
-                        GLES20.glViewport(0, srPanelH, srW, srPanelH);
+                        GLES20.glViewport(0, panelH, outputWidth, panelH);
                         shader.draw(
                                 glContext.getDecoderTextureId(),
                                 stMatrix,
@@ -309,7 +293,7 @@ public class Pass3Renderer {
                                 feather);
 
                         // Bottom panel
-                        GLES20.glViewport(0, 0, srW, srPanelH);
+                        GLES20.glViewport(0, 0, outputWidth, panelH);
                         shader.draw(
                                 glContext.getDecoderTextureId(),
                                 stMatrix,
@@ -324,28 +308,12 @@ public class Pass3Renderer {
 
                     } else {
                         // Draw Single Full Screen (Center Crop)
-                        GLES20.glViewport(0, 0, srW, srH);
+                        GLES20.glViewport(0, 0, outputWidth, outputHeight);
                         shader.draw(glContext.getDecoderTextureId(), stMatrix, singleX, singleY, fullCropWidthNorm, fullCropHeightNorm);
                     }
                 }
 
-                srFbo.unbind();
-        java.nio.ByteBuffer srInput = srFbo.readPixels();
-        int srOutW = outputWidth;
-        int srOutH = outputHeight;
-        java.nio.ByteBuffer srOutput = java.nio.ByteBuffer.allocateDirect(srOutW * srOutH * 4);
-        if (!realEsrgan.process(srInput, srW, srH, srOutput)) {
-            throw new RuntimeException("RealESRGAN processing failed");
-        }
-
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, srTexture[0]);
-        srOutput.rewind();
-        GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA,
-                srOutW, srOutH, 0, GLES20.GL_RGBA,
-                GLES20.GL_UNSIGNED_BYTE, srOutput);
-        GLES20.glViewport(0, 0, outputWidth, outputHeight);
-        srShader.draw(srTexture[0]);
-        glContext.setPresentationTime(info.presentationTimeUs * 1000);
+                glContext.setPresentationTime(info.presentationTimeUs * 1000);
                 glContext.swapBuffers();
 
                 if (isEos) encoder.signalEndOfInputStream();
@@ -382,9 +350,6 @@ public class Pass3Renderer {
         encoderSurface.release();
         muxer.stop(); muxer.release();
         extractor.release();
-        srFbo.release();
-        realEsrgan.release();
-        GLES20.glDeleteTextures(1, srTexture, 0);
         glContext.release();
     }
 
