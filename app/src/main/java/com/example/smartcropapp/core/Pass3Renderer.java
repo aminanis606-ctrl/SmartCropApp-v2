@@ -122,8 +122,10 @@ public class Pass3Renderer {
 
         CropShaderProgram shader = new CropShaderProgram();
         RealEsrgan realEsrgan = new RealEsrgan(context);
-        int srW = Math.max(1, outputWidth / 2);
-        int srH = Math.max(1, outputHeight / 2);
+        // Direct x4 SR: generate exactly the encoder resolution.
+        // Avoid the old x4 -> 4K -> 1080p overcompute/downsample path.
+        int srW = Math.max(1, outputWidth / 4);
+        int srH = Math.max(1, outputHeight / 4);
         SrFrameBuffer srFbo = new SrFrameBuffer(srW, srH);
         TextureShaderProgram srShader = new TextureShaderProgram();
         int[] srTexture = new int[1];
@@ -330,8 +332,8 @@ public class Pass3Renderer {
 
                 srFbo.unbind();
         java.nio.ByteBuffer srInput = srFbo.readPixels();
-        int srOutW = srW * 4;
-        int srOutH = srH * 4;
+        int srOutW = outputWidth;
+        int srOutH = outputHeight;
         java.nio.ByteBuffer srOutput = java.nio.ByteBuffer.allocateDirect(srOutW * srOutH * 4);
         if (!realEsrgan.process(srInput, srW, srH, srOutput)) {
             throw new RuntimeException("RealESRGAN processing failed");
