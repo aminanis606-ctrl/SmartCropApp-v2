@@ -1,5 +1,6 @@
 package com.example.smartcropapp.core;
 
+import android.content.ContentValues;
 import android.content.Context;
 import android.graphics.SurfaceTexture;
 import android.media.MediaCodec;
@@ -9,6 +10,8 @@ import android.media.MediaFormat;
 import android.media.MediaMuxer;
 import android.net.Uri;
 import android.opengl.GLES20;
+import android.os.Build;
+import android.provider.MediaStore;
 import android.util.Log;
 import android.view.Surface;
 
@@ -19,6 +22,10 @@ import com.example.smartcropapp.sr.SrFrameBuffer;
 import com.example.smartcropapp.sr.TextureShaderProgram;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.nio.ByteBuffer;
 
 public class Pass3Renderer {
@@ -331,13 +338,55 @@ public class Pass3Renderer {
                 }
 
                 srFbo.unbind();
-        java.nio.ByteBuffer srInput = srFbo.readPixels();
-        int srOutW = outputWidth;
-        int srOutH = outputHeight;
-        java.nio.ByteBuffer srOutput = java.nio.ByteBuffer.allocateDirect(srOutW * srOutH * 4);
-        if (!realEsrgan.process(srInput, srW, srH, srOutput)) {
-            throw new RuntimeException("RealESRGAN processing failed");
-        }
+                java.nio.ByteBuffer srInput = srFbo.readPixels();
+                int srOutW = outputWidth;
+                int srOutH = outputHeight;
+                java.nio.ByteBuffer srOutput = java.nio.ByteBuffer.allocateDirect(srOutW * srOutH * 4);
+
+                try {
+                    boolean srOk = realEsrgan.process(srInput, srW, srH, srOutput);
+                    if (!srOk) {
+                        int glError = GLES20.glGetError();
+                        RuntimeException failure =
+                                new RuntimeException("RealESRGAN processing failed");
+                        writeRenderDiagnostic(
+                                context,
+                                "RealESRGAN returned false",
+                                srcWidth,
+                                srcHeight,
+                                outputWidth,
+                                outputHeight,
+                                srW,
+                                srH,
+                                srOutW,
+                                srOutH,
+                                srInput,
+                                srOutput,
+                                glError,
+                                failure);
+                        throw failure;
+                    }
+                } catch (RuntimeException e) {
+                    if (!"RealESRGAN processing failed".equals(e.getMessage())) {
+                        int glError = GLES20.glGetError();
+                        writeRenderDiagnostic(
+                                context,
+                                "RealESRGAN processing exception",
+                                srcWidth,
+                                srcHeight,
+                                outputWidth,
+                                outputHeight,
+                                srW,
+                                srH,
+                                srOutW,
+                                srOutH,
+                                srInput,
+                                srOutput,
+                                glError,
+                                e);
+                    }
+                    throw e;
+                }
 
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, srTexture[0]);
         srOutput.rewind();
@@ -387,6 +436,116 @@ public class Pass3Renderer {
         realEsrgan.release();
         GLES20.glDeleteTextures(1, srTexture, 0);
         glContext.release();
+    }
+
+    private static void writeRenderDiagnostic(
+            Context context,
+            String reason,
+            int srcWidth,
+            int srcHeight,
+            int outputWidth,
+            int outputHeight,
+            int srW,
+            int srH,
+            int srOutW,
+            int srOutH,
+            ByteBuffer srInput,
+            ByteBuffer srOutput,
+            int glError,
+            Exception exception) {
+
+        StringWriter stackWriter = new StringWriter();
+        if (exception != null) {
+            exception.printStackTrace(new PrintWriter(stackWriter));
+        }
+
+        StringBuilder report = new StringBuilder();
+        report.append("SmartReframe Pass3 Render Diagnostic\n");
+        report.append("=====================================\n");
+        report.append("Reason: ").append(reason).append('\n');
+        report.append("Source: ").append(srcWidth).append('x').append(srcHeight).append('\n');
+        report.append("Output: ").append(outputWidth).append('x').append(outputHeight).append('\n');
+        report.append("SR Input: ").append(srW).append('x').append(srH).append('\n');
+        report.append("SR Output: ").append(srOutW).append('x').append(srOutH).append('\n');
+        report.append("SR Input capacity: ")
+                .append(srInput != null ? srInput.capacity() : -1)
+                .append('\n');
+        report.append("SR Input position: ")
+                .append(srInput != null ? srInput.position() : -1)
+                .append('\n');
+        report.append("SR Input limit: ")
+                .append(srInput != null ? srInput.limit() : -1)
+                .append('\n');
+        report.append("SR Output capacity: ")
+                .append(srOutput != null ? srOutput.capacity() : -1)
+                .append('\n');
+        report.append("SR Output position: ")
+                .append(srOutput != null ? srOutput.position() : -1)
+                .append('\n');
+        report.append("SR Output limit: ")
+                .append(srOutput != null ? srOutput.limit() : -1)
+                .append('\n');
+        report.append("GLES error: 0x")
+                .append(Integer.toHexString(glError))
+                .append('\n');
+
+        if (exception != null) {
+            report.append("\nException / stack trace:\n");
+            report.append(stackWriter);
+        }
+
+        String fileName = "pass3_failure_" + System.currentTimeMillis() + ".txt";
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ContentValues values = new ContentValues();
+                values.put(MediaStore.Downloads.DISPLAY_NAME, fileName);
+                values.put(MediaStore.Downloads.MIME_TYPE, "text/plain");
+                values.put(
+                        MediaStore.Downloads.RELATIVE_PATH,
+                        "Download/SmartReframe/diagnostics");
+
+                android.content.ContentResolver resolver =
+                        context.getContentResolver();
+
+                Uri uri = resolver.insert(
+                        MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                        values);
+
+                if (uri == null) {
+                    throw new IllegalStateException("MediaStore insert returned null");
+                }
+
+                try (OutputStream out = resolver.openOutputStream(uri)) {
+                    if (out == null) {
+                        throw new IllegalStateException(
+                                "MediaStore openOutputStream returned null");
+                    }
+                    out.write(report.toString().getBytes("UTF-8"));
+                    out.flush();
+                }
+            } else {
+                File diagnosticsDir = new File(
+                        "/storage/emulated/0/Download/SmartReframe/diagnostics");
+
+                if (!diagnosticsDir.exists() && !diagnosticsDir.mkdirs()) {
+                    throw new IllegalStateException(
+                            "Gagal membuat diagnostics directory: "
+                                    + diagnosticsDir.getAbsolutePath());
+                }
+
+                File diagnosticFile = new File(diagnosticsDir, fileName);
+
+                try (FileOutputStream out = new FileOutputStream(diagnosticFile)) {
+                    out.write(report.toString().getBytes("UTF-8"));
+                    out.flush();
+                }
+            }
+
+            Log.e(TAG, "Render diagnostic written: " + fileName);
+        } catch (Exception diagnosticError) {
+            Log.e(TAG, "Gagal menulis render diagnostic", diagnosticError);
+        }
     }
 
     private static float clamp(float v, float min, float max) {
