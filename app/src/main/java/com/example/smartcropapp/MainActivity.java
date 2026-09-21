@@ -64,7 +64,7 @@ public class MainActivity extends AppCompatActivity {
         initializeStorageStructure();
         setupUI();
         setupMediaPicker();
-        checkPermissions();
+        statusText.setText("Siap. Pilih video untuk mulai.");
     }
 
     private void setupUI() {
