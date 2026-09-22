@@ -77,10 +77,12 @@ public enum ExportQuality implements Serializable {
                 break;
         }
 
-        // Calculate bitrate proportional to pixel count (base 2.5 Mbps for 720x1280)
+        // Calculate bitrate proportional to pixel count.
+        // Quality profile: 6 Mbps for 720x1280 and 12 Mbps for 1080x1920.
         long basePixels = 720L * 1280L;
         long targetPixels = (long) targetWidth * (long) targetHeight;
-        int targetBitrate = (int) (2_500_000L * targetPixels / basePixels);
+        long baseBitrate = quality == P1080 ? 12_000_000L : 6_000_000L;
+        int targetBitrate = (int) (baseBitrate * targetPixels / basePixels);
 
         return new ResolutionConfig(targetWidth, targetHeight, targetBitrate);
     }
